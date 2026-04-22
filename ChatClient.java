@@ -7,8 +7,7 @@ public class ChatServer
     static int port = 3000;
 
     /*
-    synchronized list so multiple threads can add and remove
-    without corrupting the data
+    synchronized list so multiple threads can add and remove without corrupting the data
     */
     static List<ClientHandler> clients = Collections.synchronizedList(new ArrayList<>());
 
@@ -40,12 +39,12 @@ public class ChatServer
 
     public static void broadcast(String msg, ClientHandler sender)
     {
-        //lock the list while looping so no other thread can modify it mid loop
+        //locklist while looping so no other thread can modify it
         synchronized (clients)
         {
             for (ClientHandler client : clients)
             {
-                if (client != sender) //skip the sender
+                if (client != sender) //skip sender
                 {
                     client.send(msg);
                 }

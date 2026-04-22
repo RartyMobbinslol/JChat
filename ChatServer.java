@@ -8,10 +8,8 @@ public class ChatServer
 
     /*
     ArrayList creates a normal resizable list
-    Collections.synchronizedList wraps it so multiple threads can
-    add and remove from it at the same time without corruption
-    static means it belongs to the class itself, not any specific object,
-    so every ClientHandler thread can access the same one list
+    Collections.synchronizedList wraps it so multiple threads can add and 
+    remove from it at the same time without corruption
                 vvv
     */
     static List<ClientHandler> clients = Collections.synchronizedList(new ArrayList<>());
