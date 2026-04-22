@@ -8,7 +8,7 @@ public class ChatClient
     {
         /*
         try/catch on mai. if any erors happen while connecting to the server, then
-        e.printStackTrace() prints the full error details
+        e.printStackTrace() prints the error details
                     vvv
         */
         try
