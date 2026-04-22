@@ -1,72 +1,55 @@
-import java.net.*; //gives us Socket
-import java.io.*; //gives us BufferedReader, PrintWriter, and IOException
-import java.util.*; //gives us Scanner
+import java.net.*; //ServerSocket, Socket
+import java.io.*; //streams and IOException
+import java.util.*; //List, ArrayList, Collections
 
-public class ChatClient
+public class ChatServer
 {
+    static int port = 3000;
+
+    /*
+    synchronized list so multiple threads can add and remove
+    without corrupting the data
+    */
+    static List<ClientHandler> clients = Collections.synchronizedList(new ArrayList<>());
+
     public static void main(String[] args)
     {
-        /*
-        try/catch on mai. if any erors happen while connecting to the server, then
-        e.printStackTrace() prints the error details
-                    vvv
-        */
         try
         {
-            /*
-            creates a socket connecting to the server
-            "localhost" means that we're connecting to our own machine
-            3000 is the port number, has to match what ChatServer is listening on
-                        vvv
-            */
-            Socket socket = new Socket("localhost", 3000);
-            System.out.println("connected to server!");
+            ServerSocket server = new ServerSocket(port);
+            System.out.println("Server is running on port: " + port);
 
-            /*
-            set up streams
-            in = for reading messages coming FROM the server
-            out = for sending messages TO the server
-            the "true" on PrintWriter sends data immediately
-                        vvv
-            */
-            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
-
-            /*
-            ReadThread to listen for incoming messages in the background
-            without this, we wouldnt be able to type and receive messages at the same time
-            main thread handles typing, ReadThread handles incoming messages
-            both run at the same time so neither one blocks the other
-                        vvv
-            */
-            ReadThread readThread = new ReadThread(in);
-            Thread t = new Thread(readThread);
-            t.start();
-
-            /*
-            Scanner reads whatever is typed in the terminal
-            this is the main thread, it sits here waiting for keyboard input
-            and sends whatever is typed straight to the server
-                        vvv
-            */
-            Scanner scanner = new Scanner(System.in);
-            while (scanner.hasNextLine())
+            while (true) //keep accepting clients forever
             {
-                String msg = scanner.nextLine(); //grab whatever the user typed
-                out.println(msg); //send it to the server
+                Socket socket = server.accept(); //blocks until someone connects
+                System.out.println("New connection: " + socket.getInetAddress());
 
-                if (msg.equals("/quit"))
-                {
-                    break; //exit the loop, goes to disconnect message
-                }
+                ClientHandler handler = new ClientHandler(socket);
+                clients.add(handler);
+
+                //hand off to its own thread so main loop can keep accepting
+                Thread t = new Thread(handler);
+                t.start();
             }
-
-            socket.close(); //frees up the connection when we're done
-            System.out.println("Disconnected.");
 
         } catch (IOException e)
         {
             e.printStackTrace();
+        }
+    }
+
+    public static void broadcast(String msg, ClientHandler sender)
+    {
+        //lock the list while looping so no other thread can modify it mid loop
+        synchronized (clients)
+        {
+            for (ClientHandler client : clients)
+            {
+                if (client != sender) //skip the sender
+                {
+                    client.send(msg);
+                }
+            }
         }
     }
 }

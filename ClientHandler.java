@@ -1,38 +1,35 @@
-import java.net.*; //gives us Socket
-import java.io.*; //gives us BufferedReader, PrintWriter, IOException
-import java.util.*; //gives us ArrayList
+import java.net.*; //Socket
+import java.io.*; // BufferedReader, PrintWriter, IOException
+import java.util.*; //ArrayList
 
 public class ClientHandler implements Runnable
 {
-    /*
-    these are declared up here so every method in the class can see them
-    each client gets their own copy of these
-    */
+    //declared up here so every method in the class can see them
     Socket socket;
     BufferedReader in;
     PrintWriter out;
     String username;
 
-    //constructor - runs the moment we do "new ClientHandler(socket)" in ChatServer
+    //constructor runs the moment we do "new ClientHandler(socket)" in ChatServer
     public ClientHandler(Socket socket)
     {
-        this.socket = socket; //this.socket means THIS specific objects socket
+        this.socket = socket; //REMEMBER: this.socket means THIS specific objects socket
         try
         {
             /*
             three layers of wrapping:
-            socket.getInputStream() = raw bytes coming in from the client
-            InputStreamReader = converts those bytes into readable characters
-            BufferedReader = wraps that and gives us readLine() so we can read one full line at a time
+            socket.getInputStream() gets raw bytes coming in from the client
+            InputStreamReader bytes into readable characters
+            BufferedReader gives
+             readLine() so we can read one complete line at a time
                         vvv
             */
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
             /*
-            socket.getOutputStream() = raw bytes going out to the client
-            PrintWriter wraps it and gives us println()
-            the "true" second argument = auto-flush, sends data immediately
-            without it messages could get stuck in a buffer and never arrive
+            socket.getOutputStream gets raw bytes going out to the client
+            PrintWriter gives println()
+            auto flush sends data immediately, without it messages could get stuck in buffer
                         vvv
             */
             out = new PrintWriter(socket.getOutputStream(), true);
@@ -43,24 +40,20 @@ public class ClientHandler implements Runnable
         }
     }
 
-    //Java calls this automatically when t.start() is called in ChatServer
-    //everything this client does for their whole session happens in here
+    //java calls this when t.start() is called in ChatServer
+    //everything the client does for their session happens here
     public void run()
     {
         try
         {
-            //send the client a prompt and wait for them to type their name
+            //send prompt to client and wait, then stores username when 'enter' typed
             out.println("Enter a username: ");
-
-            //readLine() freezes here until the client hits enter, then stores whatever they typed
             username = in.readLine();
 
             /*
-            loop through every connected client to check for duplicate names
-            client != this = skip comparing ourselves to ourselves
-            client.username != null = make sure the other client already has a name set
-            (theres a brief moment when someone first connects where username is still null)
-            .equals() compares actual text content, not memory addresses like == would
+            loops through clients to check for duplicate names
+            skip comparing ourselves to ourselves
+            make sure the other client has a username
                         vvv
             */
             for (ClientHandler client : ChatServer.clients)
@@ -68,20 +61,20 @@ public class ClientHandler implements Runnable
                 if (client != this && client.username != null && client.username.equals(username))
                 {
                     out.println("Username already taken. Disconnecting.");
-                    cleanup(); //close their connection and remove them from the list
-                    return;    //exit run() completely, kills this thread
+                    cleanup(); //close their connection, remove them from the list
+                    return;    //exit run(),end thread
                 }
             }
 
-            //name is good, let the server console and chat room know they joined
+            //let the server chat know they joined
             System.out.println(username + " joined the chat.");
             ChatServer.broadcast(username + " has joined!", this);
             out.println("Welcome " + username + "! Type /quit to leave.");
 
             /*
             main chat loop
-            in.readLine() returns null only when the connection is fully closed
-            so this loop automatically ends if the client force-quits
+            in.readLine() returns null only when connection is closed
+            so this loop automatically ends if the client force quits
                         vvv
             */
             String msg;
@@ -103,7 +96,6 @@ public class ClientHandler implements Runnable
                 {
                     /*
                     indexOf() returns the position of @ in the string
-                    ex: "hey @omar" returns 4 because @ is at position 4 (starts at 0)
                                 vvv
                     */
                     int atIndex = msg.indexOf("@");
@@ -168,8 +160,7 @@ public class ClientHandler implements Runnable
         out.println(msg);
     }
 
-    //handles everything when a client disconnects for any reason
-    //private means only this class can call it
+    //handles when a client disconnects
     private void cleanup()
     {
         try
@@ -180,7 +171,7 @@ public class ClientHandler implements Runnable
                 ChatServer.broadcast(username + " has left the chat.", this);
                 System.out.println(username + " disconnected.");
             }
-            socket.close(); //free up the connection
+            socket.close(); //free connection
         } catch (IOException e)
         {
             e.printStackTrace();
