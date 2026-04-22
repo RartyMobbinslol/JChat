@@ -1,54 +1,46 @@
-import java.net.*; //ServerSocket, Socket
+import java.net.*; //Socket
 import java.io.*; //streams and IOException
-import java.util.*; //List, ArrayList, Collections
+import java.util.*; //Scanner
 
-public class ChatServer
+public class ChatClient
 {
-    static int port = 3000;
-
-    /*
-    synchronized list so multiple threads can add and remove without corrupting the data
-    */
-    static List<ClientHandler> clients = Collections.synchronizedList(new ArrayList<>());
-
     public static void main(String[] args)
     {
         try
         {
-            ServerSocket server = new ServerSocket(port);
-            System.out.println("Server is running on port: " + port);
+            //localhost means our own machine, 3000 has to match ChatServer
+            Socket socket = new Socket("localhost", 3000);
+            System.out.println("Successfully connected to server!");
 
-            while (true) //keep accepting clients forever
+            //same stream setup as ClientHandler
+            //in reads from server, out sends to server
+            BufferedReader in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintWriter out = new PrintWriter(socket.getOutputStream(), true);
+
+            //background thread handles incoming messages
+            //so main thread can keep reading keyboard input at the same time
+            ReadThread readThread = new ReadThread(in);
+            Thread t = new Thread(readThread);
+            t.start();
+
+            //main thread sits here reading keyboard input and sending to server
+            Scanner scanner = new Scanner(System.in);
+            while (scanner.hasNextLine())
             {
-                Socket socket = server.accept(); //blocks until someone connects
-                System.out.println("New connection: " + socket.getInetAddress());
-
-                ClientHandler handler = new ClientHandler(socket);
-                clients.add(handler);
-
-                //hand off to its own thread so main loop can keep accepting
-                Thread t = new Thread(handler);
-                t.start();
+                String msg = scanner.nextLine();
+                out.println(msg); //send to server
+                if (msg.equals("/quit"))
+                {
+                    break;
+                }
             }
+
+            socket.close();
+            System.out.println("Disconnected.");
 
         } catch (IOException e)
         {
             e.printStackTrace();
-        }
-    }
-
-    public static void broadcast(String msg, ClientHandler sender)
-    {
-        //locklist while looping so no other thread can modify it
-        synchronized (clients)
-        {
-            for (ClientHandler client : clients)
-            {
-                if (client != sender) //skip sender
-                {
-                    client.send(msg);
-                }
-            }
         }
     }
 }

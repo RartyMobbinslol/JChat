@@ -1,37 +1,25 @@
 import java.net.*; //Socket
-import java.io.*; // BufferedReader, PrintWriter, IOException
+import java.io.*; //BufferedReader, PrintWriter, IOException
 import java.util.*; //ArrayList
 
 public class ClientHandler implements Runnable
 {
-    //declared up here so every method in the class can see them
+    //each client gets their own copy of these
     Socket socket;
     BufferedReader in;
     PrintWriter out;
     String username;
 
-    //constructor runs the moment we do "new ClientHandler(socket)" in ChatServer
     public ClientHandler(Socket socket)
     {
-        this.socket = socket; //REMEMBER: this.socket means THIS specific objects socket
+        this.socket = socket;
         try
         {
-            /*
-            three layers of wrapping:
-            socket.getInputStream() gets raw bytes coming in from the client
-            InputStreamReader bytes into readable characters
-            BufferedReader gives
-             readLine() so we can read one complete line at a time
-                        vvv
-            */
+            //wrap the socket streams so we can read and write full lines of text
+            //goes BufferedReader wrapping InputStreamReader wrapping raw socket bytes
             in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-            /*
-            socket.getOutputStream gets raw bytes going out to the client
-            PrintWriter gives println()
-            auto flush sends data immediately, without it messages could get stuck in buffer
-                        vvv
-            */
+            //true means auto flush, sends data immediately instead of buffering it
             out = new PrintWriter(socket.getOutputStream(), true);
 
         } catch (IOException e)
@@ -40,138 +28,106 @@ public class ClientHandler implements Runnable
         }
     }
 
-    //java calls this when t.start() is called in ChatServer
-    //everything the client does for their session happens here
+    //t.start() in ChatServer calls this automatically in a new thread
     public void run()
     {
         try
         {
-            //send prompt to client and wait, then stores username when 'enter' typed
+            //ask for a name and wait for them to type one
             out.println("Enter a username: ");
             username = in.readLine();
 
-            /*
-            loops through clients to check for duplicate names
-            skip comparing ourselves to ourselves
-            make sure the other client has a username
-                        vvv
-            */
+            //check for duplicate names
             for (ClientHandler client : ChatServer.clients)
             {
+                //skip ourselves, skip anyone without a name yet, compare actual text with equals
                 if (client != this && client.username != null && client.username.equals(username))
                 {
                     out.println("Username already taken. Disconnecting.");
-                    cleanup(); //close their connection, remove them from the list
-                    return;    //exit run(),end thread
+                    cleanup();
+                    return; //kill this thread
                 }
             }
 
-            //let the server chat know they joined
             System.out.println(username + " joined the chat.");
             ChatServer.broadcast(username + " has joined!", this);
             out.println("Welcome " + username + "! Type /quit to leave.");
 
-            /*
-            main chat loop
-            in.readLine() returns null only when connection is closed
-            so this loop automatically ends if the client force quits
-                        vvv
-            */
+            //main chat loop, readLine blocks until they send something
+            //returns null if connection closes so loop handles force quits automatically
             String msg;
             while ((msg = in.readLine()) != null)
             {
                 if (msg.equals("/quit"))
                 {
                     out.println("Goodbye!");
-                    break; //exit the loop, falls through to finally block
+                    break; //cleanup runs in finally
                 }
 
                 System.out.println("[" + username + "]: " + msg);
-
-                //send to everyone else, we pass "this" so broadcast skips sending it back to us
                 ChatServer.broadcast(username + ": " + msg, this);
 
-                // START PING DETECTION 
-                if (msg.contains("@")) //check if theres an @ anywhere in the message
+                // --- PING DETECTION ---
+                if (msg.contains("@"))
                 {
-                    /*
-                    indexOf() returns the position of @ in the string
-                                vvv
-                    */
+                    //find the @ and grab everything after it
                     int atIndex = msg.indexOf("@");
+                    String afterAt = msg.substring(atIndex + 1); //skip the @ itself
 
-                    /*
-                    substring() cuts the string starting at the position we give it
-                    atIndex + 1 starts right AFTER the @ to skip it
-                    ex: "hey @omar" becomes "omar"
-                                vvv
-                    */
-                    String afterAt = msg.substring(atIndex + 1);
-
-                    /*
-                    split(" ") chops the string into an array wherever theres a space
-                    ex: "omar how are you" becomes ["omar", "how", "are", "you"]
-                    words[0] grabs the first word which is the username we want
-                                vvv
-                    */
-                    String[] words = afterAt.split (" " );
+                    //first word after @ is the target username
+                    //so "hey @omar how are you" gives us omar as words[0]
+                    String[] words = afterAt.split(" ");
                     String targetName = words[0];
 
-                    ClientHandler target = null; //null means we havent found them yet
-
-                    //search through every connected client to find the one with that username
+                    //search the client list for that username
+                    ClientHandler target = null;
                     for (ClientHandler client : ChatServer.clients)
                     {
                         if (client.username != null && client.username.equals(targetName))
                         {
-                            target = client; //found them
-                            break;           //stop searching
+                            target = client;
+                            break; //found them, stop searching
                         }
                     }
 
-                    /*
-                    two safety checks before sending:
-                    target != null = make sure we actually found someone
-                    target != this = make sure you cant ping yourself
-                                vvv
-                    */
+                    //make sure we found someone and its not ourselves
                     if (target != null && target != this)
                     {
-                        //send directly to that one client, nobody else gets this copy
+                        //send directly to them, nobody else gets this copy
                         target.send("[PING from " + username + "]: " + msg);
                     }
                 }
-                // END PING DETECTION
+                // --- END PING DETECTION ---
             }
 
         } catch (IOException e)
         {
-            e.printStackTrace(); //something went wrong with the connection
+            e.printStackTrace();
         } finally
         {
-            //finally always runs no matter what, guarantees cleanup always happens
+            //always runs no matter how they disconnect
             cleanup();
         }
     }
 
-    //other classes call this to send a message to this specific client
+    //other classes call this to send to this specific client
     public void send(String msg)
     {
         out.println(msg);
     }
 
-    //handles when a client disconnects
+    //private so only this class can call it
     private void cleanup()
     {
         try
         {
-            ChatServer.clients.remove(this); //take them off the list so they stop getting broadcasts
-            if (username != null) //only broadcast if they made it past the username stage
+            ChatServer.clients.remove(this); //stop them getting broadcasts
+            if (username != null)
             {
                 ChatServer.broadcast(username + " has left the chat.", this);
                 System.out.println(username + " disconnected.");
             }
-            socket.close(); //free connection
+            socket.close();
         } catch (IOException e)
         {
             e.printStackTrace();
