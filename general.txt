@@ -1,0 +1,5 @@
+user1: helloo
+user4: git add .
+user4: git add *.java
+user4: git commit -m "added chat rooms, dms and history chat logs"
+user: java ChatClient

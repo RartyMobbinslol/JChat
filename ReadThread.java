@@ -1,4 +1,4 @@
-import java.io.*; //BufferedReader, IOException
+import java.io.*;
 
 public class ReadThread implements Runnable
 {
@@ -6,7 +6,7 @@ public class ReadThread implements Runnable
 
     public ReadThread(BufferedReader in)
     {
-        this.in = in; //store the stream ChatClient passed in
+        this.in = in; //save the stream ChatClient passed in
     }
 
     //runs in background so client can type and receive at the same time
